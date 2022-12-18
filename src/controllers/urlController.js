@@ -1,27 +1,24 @@
 const urlModel = require('../models/urlModel');
 const isUrlValid = require("url-validation");
 const{isValidRequestBody,isValid}=require('../validations/validation')
-const axios = require('axios')
 const shortid = require("shortid");
 const redis = require("redis")
-const{ promisify }=require("util")
-
+const{ promisify }=require("util");
 
 
 //1. Connect to the redis server
 const redisClient = redis.createClient(
-    19651,
-    "redis-19651.c212.ap-south-1-1.ec2.cloud.redislabs.com",
+    10469,
+    "redis-10469.c301.ap-south-1-1.ec2.cloud.redislabs.com",
     { no_ready_check: true }
   );
-  redisClient.auth("KxNteVr0C2qGoJ5MMqbtZuDlNeeXI9OR", function (err) {
+  redisClient.auth("R8OjrEaY9YPFMeL7tED1BYClSkqCTLe7", function (err) {
     if (err) throw err;
   });
   
   redisClient.on("connect", async function () {
     console.log("Connected to Redis..");
   });
-  
   
   
   //2. Prepare the functions for each command
@@ -56,26 +53,16 @@ const generateUrl = async function (req, res) {
     let cahcedUrlData = await GET_ASYNC(`${longUrl}`)
         if (cahcedUrlData) {
         const urlDetails = JSON.parse(cahcedUrlData)
-            return res.status(200).send({ satus: true, data: urlDetails })
+            return res.status(200).send({ satus: true, data: urlDetails, msg: "Url is coming from Cache" })
         }
 
-    // let option = {
-    //     method: 'get',
-    //     url: longUrl
-    // }
-    // let urlValidate = await axios(option)
-    //     .then(() => longUrl)    
-    //     .catch(() => null)     
-
-    // if (!urlValidate) { 
-    //     return res.status(400).send({ status: false, message: `This Link ${longUrl} is not Valid URL.` }) 
-    // }
    
-        let myUrl = longUrl.trim().split(' ').join('')
+   
+        let myUrl = longUrl
         let url = await urlModel.findOne({ longUrl: myUrl }).select({ longUrl: 1, shortUrl: 1, urlCode: 1, _id: 0 })
         if (url) {
             await SET_ASYNC(`${longUrl}`,JSON.stringify(url),"EX",30)
-            return res.status(200).send({ satus: true, data: url})
+            return res.status(200).send({ satus: true, data: url, msg: "Url is coming from DB"})
            
         }
         else {
@@ -85,7 +72,7 @@ const generateUrl = async function (req, res) {
             
 
             url = {
-                longUrl: longUrl.trim().split(' ').join(''),
+                longUrl: longUrl,
                 shortUrl: shortUrlInLowerCase,
                 urlCode: urlCode,
             }
@@ -111,7 +98,9 @@ const redirectToLongUrl = async function (req, res) {
         let cachedUrlData = await GET_ASYNC(`${urlCode}`)
 
         if (cachedUrlData) {
+           console.log(cachedUrlData)
             const parseLongUrl = JSON.parse(cachedUrlData)
+            console.log(parseLongUrl)
            res.status(302).redirect(parseLongUrl.longUrl)
         }
 
@@ -122,7 +111,7 @@ const redirectToLongUrl = async function (req, res) {
             }
             else {
                 await SET_ASYNC(`${urlCode}`, JSON.stringify(findUrl),"EX",30)
-                res.status(302).redirect(findUrl.longUrl)
+                 res.status(302).redirect(findUrl.longUrl)
             }
         }
     }
@@ -130,5 +119,6 @@ const redirectToLongUrl = async function (req, res) {
         return res.status(500).send({ status: false, msg: err.message })
     }
 }
+
 
 module.exports={generateUrl,redirectToLongUrl}
